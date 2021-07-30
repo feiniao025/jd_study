@@ -118,10 +118,14 @@ type UserInfoResult struct {
 
 func initCookie() {
 	go func() {
+		available := True
 		for _, ck := range GetJdCookies() {
 			if ck.Available == True && !CookieOK(&ck) {
-				Save <- &ck
+				available = False
 			}
+		}
+		if available == False {
+			Save <- &JdCookie{}
 		}
 	}()
 }

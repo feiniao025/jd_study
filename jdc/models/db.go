@@ -41,7 +41,7 @@ func GetJdCookies() []JdCookie {
 	cks := []JdCookie{}
 	db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(JD_COOKIE))
-		b.ForEach(func(_, v []byte) error {
+		b.ForEach(func(k, v []byte) error {
 			ck := JdCookie{}
 			var _v = reflect.ValueOf(&ck).Elem()
 			for _, vv := range strings.Split(string(v), ";") {
@@ -61,6 +61,34 @@ func GetJdCookies() []JdCookie {
 
 			}
 			cks = append(cks, ck)
+			for i := range cks {
+				cks[i].ID = i + 1
+				if cks[i].Nickname == "" {
+					cks[i].Nickname = "--"
+				}
+				if cks[i].ScanedAt == "" {
+					cks[i].ScanedAt = "____-__-__"
+				}
+				if cks[i].BeanNum == "" {
+					cks[i].BeanNum = "--"
+				}
+				if cks[i].Note == "" {
+					cks[i].Note = "--"
+				}
+				if cks[i].Priority == 0 {
+					cks[i].Priority = 1
+				}
+			}
+			length := len(cks)
+			for i := 0; i < length; i++ {
+				max := i
+				for j := i + 1; j < length; j++ {
+					if cks[j].Priority > cks[max].Priority {
+						max = j
+					}
+				}
+				cks[i], cks[max] = cks[max], cks[i]
+			}
 			return nil
 		})
 		return nil

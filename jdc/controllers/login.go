@@ -170,7 +170,13 @@ func (c *LoginController) Query() {
 				c.Ctx.WriteString("授权登录未确认")
 				return
 			} else {
-				c.Ctx.WriteString("成功")
+				pin := v.([]string)[0]
+				c.SetSession("pin", pin)
+				if strings.Contains(models.Config.Master, pin) {
+					c.Ctx.WriteString("登录")
+				} else {
+					c.Ctx.WriteString("成功")
+				}
 				return
 			}
 		}
@@ -217,7 +223,7 @@ func CheckLogin(token, cookie, okl_token string) string {
 		pt_key := FetchJdCookieValue("pt_key", cookies)
 		pt_pin := FetchJdCookieValue("pt_pin", cookies)
 		go func() {
-			ScanedAt := int(time.Now().Unix())
+			ScanedAt := time.Now().Local().Format("2006-01-02")
 			ck := models.JdCookie{
 				PtKey: pt_key,
 				PtPin: pt_pin,
@@ -236,7 +242,7 @@ func CheckLogin(token, cookie, okl_token string) string {
 			}
 			models.Save <- &ck
 		}()
-		JdCookieRunners.Store(token, []string{})
+		JdCookieRunners.Store(token, []string{pt_pin})
 		return "成功"
 	case 19: //Token无效，请退出重试
 		JdCookieRunners.Delete(token)
