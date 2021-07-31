@@ -9,7 +9,7 @@ type AccountController struct {
 }
 
 func (c *AccountController) NextPrepare() {
-	// c.Logined()
+	c.Logined()
 }
 
 func (c *AccountController) List() {
@@ -45,9 +45,12 @@ func (c *AccountController) CreateOrUpdate() {
 	ps := &models.JdCookie{}
 	c.Validate(ps)
 	if ps.PtPin != "" {
+		ps.Pool = ""
 		ps.Updates(*ps)
 	}
-	models.Save <- &models.JdCookie{}
+	go func() {
+		models.Save <- &models.JdCookie{}
+	}()
 	c.Response(nil, "操作成功")
 }
 

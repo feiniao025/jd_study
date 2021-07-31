@@ -15,7 +15,7 @@ var JD_COOKIE = "JD_COOKIE"
 
 func initDB() {
 	var err error
-	db, err = bolt.Open(ExecPath+"/.jdc.db", 0600, nil)
+	db, err = bolt.Open(Config.Database, 0600, nil)
 	if err != nil {
 		logs.Warn(err)
 	}
@@ -61,6 +61,16 @@ func GetJdCookies() []JdCookie {
 
 			}
 			cks = append(cks, ck)
+			length := len(cks)
+			for i := 0; i < length; i++ {
+				max := i
+				for j := i + 1; j < length; j++ {
+					if cks[j].Priority > cks[max].Priority {
+						max = j
+					}
+				}
+				cks[i], cks[max] = cks[max], cks[i]
+			}
 			for i := range cks {
 				cks[i].ID = i + 1
 				if cks[i].Nickname == "" {
@@ -78,16 +88,6 @@ func GetJdCookies() []JdCookie {
 				if cks[i].Priority == 0 {
 					cks[i].Priority = 1
 				}
-			}
-			length := len(cks)
-			for i := 0; i < length; i++ {
-				max := i
-				for j := i + 1; j < length; j++ {
-					if cks[j].Priority > cks[max].Priority {
-						max = j
-					}
-				}
-				cks[i], cks[max] = cks[max], cks[i]
 			}
 			return nil
 		})
@@ -188,8 +188,11 @@ func (ck *JdCookie) Updates(us ...interface{}) {
 					switch t.Kind() {
 					case reflect.Int:
 						if v, ok := v.(int); ok {
-
 							t.SetInt(int64(v))
+						}
+					case reflect.Int64:
+						if v, ok := v.(int64); ok {
+							t.SetInt(v)
 						}
 					case reflect.String:
 						if v, ok := v.(string); ok {

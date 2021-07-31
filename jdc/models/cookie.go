@@ -4,8 +4,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-
-	"github.com/beego/beego/v2/core/logs"
+	"strings"
+	"time"
 )
 
 func init() {
@@ -13,8 +13,12 @@ func init() {
 	ExecPath, _ = filepath.Abs(filepath.Dir(os.Args[0]))
 	Save = make(chan *JdCookie)
 	go func() {
+		init := true
 		for {
-			<-Save
+			get := <-Save
+			if get.Pool == "s" {
+				initCookie()
+			}
 			cks := GetJdCookies()
 			if Config.Mode == Parallel {
 				for i := range Config.Containers {
@@ -28,18 +32,24 @@ func init() {
 				conclude := []int{}
 				total := 0.0
 				availables := []Container{}
+				parallels := []Container{}
 				for i := range Config.Containers {
 					(&Config.Containers[i]).read()
+
 					if Config.Containers[i].Available {
-						availables = append(availables, Config.Containers[i])
-						weigth = append(weigth, float64(Config.Containers[i].Weigth))
-						total += float64(Config.Containers[i].Weigth)
+						if Config.Containers[i].Mode == Parallel {
+							parallels = append(parallels, Config.Containers[i])
+						} else {
+							availables = append(availables, Config.Containers[i])
+							weigth = append(weigth, float64(Config.Containers[i].Weigth))
+							total += float64(Config.Containers[i].Weigth)
+						}
 					}
 				}
-				if total == 0 {
-					logs.Warn("容器都挂了")
-					continue
-				}
+				// if total == 0 {
+				// 	logs.Warn("容器都挂了")
+				// 	continue
+				// }
 
 				l := len(cks)
 				for _, v := range weigth {
@@ -53,6 +63,21 @@ func init() {
 						break
 					}
 				}
+				for i := range parallels {
+					parallels[i].write(cks)
+				}
+			}
+			if init {
+				go func() {
+					for {
+						Save <- &JdCookie{
+							Pool: "s",
+						}
+						time.Sleep(time.Minute * 30)
+						// time.Sleep(time.Second * 1)
+					}
+				}()
+				init = false
 			}
 		}
 	}()
@@ -68,11 +93,66 @@ type JdCookie struct {
 	Available string `validate:"oneof=true false"`
 	Nickname  string
 	BeanNum   string
+	Pool      string
+	Delete    string `validate:"oneof=true false"`
 }
 
+var ScanedAt = "ScanedAt"
+var Note = "Note"
+var Available = "Available"
+var PtKey = "PtKey"
+var PtPin = "PtPin"
+var Priority = "Priority"
+var Nickname = "Nickname"
+var BeanNum = "BeanNum"
+var Pool = "Pool"
 var True = "true"
 var False = "false"
-
 var Save chan *JdCookie
-
 var ExecPath string
+
+func (ck *JdCookie) ToPool(key string) {
+	ck = GetJdCookie(ck.PtPin)
+	if key == ck.PtKey {
+		return
+	}
+	if strings.Contains(ck.Pool, key) {
+		return
+	}
+	if ck.Pool == "" {
+		ck.Pool = ck.PtKey
+	} else {
+		ck.Pool += "," + ck.PtKey
+	}
+	ck.Updates(JdCookie{
+		Available: True,
+		PtKey:     key,
+		Pool:      ck.Pool,
+		ScanedAt:  time.Now().Local().Format("2006-01-02"),
+	})
+}
+
+func (ck *JdCookie) shiftPool() string {
+	ck = GetJdCookie(ck.PtPin)
+	if ck.Pool == "" {
+		return ""
+	}
+	pool := strings.Split(ck.Pool, ",")
+	shift := ""
+	if len(pool) != 0 {
+		shift = pool[0]
+		pool = pool[1:]
+	}
+	us := map[string]interface{}{}
+	if shift == "" {
+		us[Pool] = ""
+		us[Available] = False
+		us[PtKey] = ""
+	} else {
+		us[Pool] = strings.Join(pool, ",")
+		us[Available] = True
+		us[PtKey] = shift
+	}
+	ck.Updates(us)
+	return shift
+}
